@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from tqdm import tqdm
 import argparse
+import yfinance as yf
 import sys
 import os
 from datetime import timedelta
@@ -63,9 +64,10 @@ class HMMStockPredictor:
         """Downloads data and splits it into training and testing datasets."""
         # Use pandas_reader.data.DataReader to load the required financial data. Checks if the stock entry is valid.
         try:
-            used_data = data.DataReader(
-                self.company, "yahoo", self.start_date, self.end_date
-            )
+            #used_data = data.DataReader(
+            #    self.company, "yahoo", self.start_date, self.end_date
+            #)
+            used_data = yf.download(self.company, start = self.start_date, end = self.end_date)
         except IOError:
             print(
                 "Invalid stock selection. Please try again with a stock that is available on Yahoo finance."
@@ -77,6 +79,8 @@ class HMMStockPredictor:
         )
         self.train_data = _train_data
         self.test_data = test_data
+
+        print(test_data)
 
         # Drop the columns that aren't used
         self.train_data = self.train_data.drop(["Volume", "Adj Close"], axis=1)
@@ -130,11 +134,13 @@ class HMMStockPredictor:
         # Use the previous n_latency_days worth of data for predictions
         previous_data_start_index = max(0, day_index - self.n_latency_days)
         previous_data_end_index = max(0, day_index - 1)
+        
         previous_data = self.test_data.iloc[
             previous_data_start_index:previous_data_end_index
         ]
+        
         previous_data_features = HMMStockPredictor._extract_features(previous_data)
-
+        
         outcome_score = []
 
         # Score all possible outcomes and select the most probable one to use for prediction
@@ -236,7 +242,7 @@ class HMMStockPredictor:
             + " to "
             + str(self.test_data.index[-1])
         )
-
+    
         # Iterate over only the final x days in the test data dataframe.
         for day_index in tqdm(range(future_indices, len(self.test_data))):
             predicted_close_prices.append(self.predict_close_price_fut_days(day_index))
@@ -270,7 +276,7 @@ def plot_results(in_df, out_dir, stock_name):
     plt.title(str(stock_name) + " daily closing stock prices")
     save_dir = f"{out_dir}/{stock_name}_results_plot.png"
     plt.savefig(save_dir)
-    plt.show()
+    #plt.show()
     plt.close("all")
 
 
@@ -329,8 +335,8 @@ def use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir
 
         # Calculate Mean Squared Error and save
         mse = calc_mse(output_df)
-        out_name = f"{out_dir}/{company_name}_HMM_Prediction_{str(round(mse, 6))}.xlsx"
-        output_df.to_excel(out_name)  # Requires openpyxl installed
+        out_name = f"{out_dir}/{company_name}_HMM_Prediction_{str(round(mse, 6))}.dat"
+        output_df.to_csv(out_name)  # Requires openpyxl installed
         print(
             "All predictions saved. The Mean Squared Error for the "
             + str(stock_predictor.days)
@@ -357,9 +363,9 @@ def use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir
         )
 
         out_final = (
-            f"{out_dir}/{company_name}_HMM_Predictions_{future}_days_in_future.xlsx"
+            f"{out_dir}/{company_name}_HMM_Predictions_{future}_days_in_future.dat"
         )
-        stock_predictor.test_data.to_excel(out_final)  # Requires openpyxl installed
+        stock_predictor.test_data.to_csv(out_final)  # Requires openpyxl installed
         print(
             "The full set of predictions has been saved, including the High, Low, Open and Close prices for "
             + str(future)
